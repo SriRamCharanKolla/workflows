@@ -1,0 +1,27 @@
+name: nodejs-feature-pipeline-branch-workflow
+on:
+  # someone should call this workflow
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project name'
+        required: true
+        type: string
+      component:
+        description: 'Component name'
+        required: true
+        type: string
+      environment:
+        description: 'Env name'
+        required: true
+        type: string
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v6
+
+      - name: list files
+        run: ls -la
