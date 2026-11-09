@@ -17,6 +17,11 @@ on:
         default: 'dev'
         type: string
 
+env:
+  project: ${{ inputs.project }}
+  component: ${{ inputs.component }}
+  acc_id: 069416262340
+
 jobs:
   trigger:
     runs-on: ubuntu-latest
@@ -32,3 +37,67 @@ jobs:
 
       - name: check app version
         run: echo "$APP_VERSION"
+
+      - name: install dependencies
+        run: npm install
+
+      - name: unit tests
+        run: npm test
+
+      - name: sonar scan
+        id: sonar_scan 
+        uses: SonarSource/sonarqube-scan-action@v8.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }} # or https://sonarcloud.io
+
+      - name: SonarQube Quality Gate check
+        id: sonar_check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          pollingTimeoutSec: 600
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }} #OPTIONAL
+
+      - name: Check Dependabot Alerts
+        id: library_scan
+        uses: Posture-Cybersecurity/dependabot-security-checker@v1.1.5
+        with:
+          github-token: ${{ secrets.DEPENDABOT_TOKEN }}
+          severities: 'critical,high'  # Only check critical and high
+          output-file: 'security-report.csv'
+          fail-on-alerts: 'true'  # Fail workflow if alerts found
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: build image
+        id: build_image
+        run: |
+          docker build -t  ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${APP_VERSION} .
+          # docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${APP_VERSION}
+
+      - name: trivy scan
+        id: trivy_scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.acc_id }}.dkr.ecr.us-east-1.amazonaws.com/${{ env. project }}/${{ env.component }}:${{ env.APP_VERSION }}
+          scan-type: 'image'
+          vuln-type: os
+          format: 'table'
+          exit-code: 1
+          severity: 'CRITICAL,HIGH'
+      
+      - name: push image
+        id: push_image
+        run: |
+          docker push  ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${APP_VERSION}
