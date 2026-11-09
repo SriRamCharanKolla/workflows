@@ -13,7 +13,8 @@ on:
         type: string
       environment:
         description: 'Env name'
-        required: true
+        required: false
+        default: 'dev'
         type: string
 
 jobs:
